@@ -1,0 +1,33 @@
+name: Database Automation P2
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  SQL_SCRIPTS_PATH: "scripts/setup2.sql"
+
+jobs:
+  setup-dev:
+    uses: ./.github/workflows/sql-setup-template.yml
+    with:
+      environment: "development"
+      admin_user: ${{ secrets.DEV_ADMIN_USER }}
+      admin_password: ${{ secrets.DEV_ADMIN_PASSWORD }}
+      pinggy_url: ${{ secrets.DEV_PINGGY_URL }}
+      sql_password: ${{ secrets.DEV_SQL_PASSWORD }}
+    secrets: inherit
+
+  setup-prod:
+    needs: setup-dev
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/sql-setup-template.yml
+    with:
+      environment: "production"
+      admin_user: ${{ secrets.PROD_ADMIN_USER }}
+      admin_password: ${{ secrets.PROD_ADMIN_PASSWORD }}
+      pinggy_url: ${{ secrets.PROD_PINGGY_URL }}
+      sql_password: ${{ secrets.PROD_SQL_PASSWORD }}
+    secrets: inherit
