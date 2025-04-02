@@ -1,0 +1,64 @@
+name: SQL Server Setup Template
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      admin_user:
+        required: true
+        type: string
+      admin_password:
+        required: true
+        type: string
+      pinggy_url:
+        required: true
+        type: string
+      sql_password:
+        required: true
+        type: string
+
+jobs:
+  sql-setup:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install SQL Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+          curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/msprod.list
+          sudo apt-get update
+          sudo apt-get install -y mssql-tools unixodbc-dev
+          echo "/opt/mssql-tools/bin" >> $GITHUB_PATH
+
+      - name: Test Connection
+        id: test-connection
+        continue-on-error: true
+        run: |
+          if ! sqlcmd -S "${{ inputs.pinggy_url }}" -U "${{ inputs.admin_user }}" -P "${{ inputs.admin_password }}" -C -Q "SELECT @@VERSION"; then
+            echo "::error::Connection failed to ${{ inputs.environment }} SQL Server"
+            exit 1
+          fi
+
+      - name: Setup Database
+        if: steps.test-connection.outcome == 'success'
+        run: |
+          sqlcmd -S "${{ inputs.pinggy_url }}" -U "${{ inputs.admin_user }}" -P "${{ inputs.admin_password }}" -C -i "${{ env.SQL_SCRIPTS_PATH }}" || {
+            echo "::error::Database setup failed in ${{ inputs.environment }}"
+            exit 1
+          }
+
+      - name: Verify Data
+        if: steps.test-connection.outcome == 'success'
+        run: |
+          if ! sqlcmd -S "${{ inputs.pinggy_url }}" -U Auto_user -P "${{ inputs.sql_password }}" -C -d AutoDBErnest -Q "SELECT * FROM [dbo].[user]"; then
+            echo "::error::Data verification failed in ${{ inputs.environment }}"
+            exit 1
+          fi
