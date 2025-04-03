@@ -1,4 +1,6 @@
+# .github/workflows/database-automation-p2.yml
 name: Database Automation P2
+
 on:
   push:
     branches: [ main ]
@@ -6,28 +8,29 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-env:
-  SQL_SCRIPTS_PATH: "scripts/setup2.sql"
-
 jobs:
   setup-dev:
-    uses: ./.github/workflows/sql-setup-template.yml
-    with:
-      environment: "development"
-      admin_user: ${{ secrets.DEV_ADMIN_USER }}
-      admin_password: ${{ secrets.DEV_ADMIN_PASSWORD }}
-      pinggy_url: ${{ secrets.DEV_PINGGY_URL }}
-      sql_password: ${{ secrets.DEV_SQL_PASSWORD }}
-    secrets: inherit
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - uses: ./.github/workflows/templates/db-setup-template.yml
+        with:
+          environment: development
+          admin_user: DEV_ADMIN_USER
+          admin_password: DEV_ADMIN_PASSWORD
+          pinggy_url: DEV_PINGGY_URL
+          sql_password: DEV_SQL_PASSWORD
 
   setup-prod:
+    runs-on: ubuntu-latest
+    environment: production
     needs: setup-dev
     if: github.event_name != 'pull_request'
-    uses: ./.github/workflows/sql-setup-template.yml
-    with:
-      environment: "production"
-      admin_user: ${{ secrets.PROD_ADMIN_USER }}
-      admin_password: ${{ secrets.PROD_ADMIN_PASSWORD }}
-      pinggy_url: ${{ secrets.PROD_PINGGY_URL }}
-      sql_password: ${{ secrets.PROD_SQL_PASSWORD }}
-    secrets: inherit
+    steps:
+      - uses: ./.github/workflows/templates/db-setup-template.yml
+        with:
+          environment: production
+          admin_user: PROD_ADMIN_USER
+          admin_password: PROD_ADMIN_PASSWORD
+          pinggy_url: PROD_PINGGY_URL
+          sql_password: PROD_SQL_PASSWORD
