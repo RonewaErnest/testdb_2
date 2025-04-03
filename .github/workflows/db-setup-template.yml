@@ -50,6 +50,20 @@ jobs:
         shell: bash
         run: echo "/opt/mssql-tools/bin" >> $GITHUB_PATH
 
+      - name: Debug Network Connectivity
+        shell: bash
+        env:
+          PINGGY_URL: ${{ secrets[inputs.pinggy_url] }}
+        run: |
+          echo "Attempting to connect to: $PINGGY_URL"
+          # Extract host and port from PINGGY_URL (e.g., tcp:hostname,port -> hostname and port)
+          HOST=$(echo "$PINGGY_URL" | sed 's/tcp://' | cut -d',' -f1)
+          PORT=$(echo "$PINGGY_URL" | sed 's/tcp://' | cut -d',' -f2)
+          echo "Pinging host: $HOST"
+          ping -c 4 "$HOST" || echo "Ping failed"
+          echo "Testing port: $PORT on host: $HOST"
+          nc -zv "$HOST" "$PORT" || echo "Port test failed"
+
       - name: Test Connection to SQL Server
         shell: bash
         env:
