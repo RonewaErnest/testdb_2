@@ -1,4 +1,3 @@
-# .github/workflows/database-automation-p2.yml
 name: Database Automation P2
 
 on:
@@ -17,6 +16,7 @@ jobs:
       admin_password: DEV_ADMIN_PASSWORD
       pinggy_url: DEV_PINGGY_URL
       sql_password: DEV_SQL_PASSWORD
+    secrets: inherit
 
   setup-prod:
     needs: setup-dev
@@ -28,3 +28,4 @@ jobs:
       admin_password: PROD_ADMIN_PASSWORD
       pinggy_url: PROD_PINGGY_URL
       sql_password: PROD_SQL_PASSWORD
+    secrets: inherit
