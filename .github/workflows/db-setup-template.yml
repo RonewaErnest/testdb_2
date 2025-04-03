@@ -58,7 +58,7 @@ jobs:
           echo "Verifying database deployment for ${{ inputs.environment }} environment"
           
           {
-            sqlcmd -S "$SQL_SERVER" -U "$SQL_USER" -P "$SQL_PASSWORD" -Q "SELECT * FROM AutoDBOngeziwe.dbo.user" -l 60
+            sqlcmd -S "$SQL_SERVER" -U "$SQL_USER" -P "$SQL_PASSWORD" -Q "SELECT * FROM AutoDBErnest.dbo.user" -l 60
           } || {
             echo "Database verification failed for ${{ inputs.environment }} environment"
             exit 1
