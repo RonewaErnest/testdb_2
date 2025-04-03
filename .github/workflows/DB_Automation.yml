@@ -10,27 +10,21 @@ on:
 
 jobs:
   setup-dev:
-    runs-on: ubuntu-latest
-    environment: development
-    steps:
-      - uses: ./.github/workflows/templates/db-setup-template.yml
-        with:
-          environment: development
-          admin_user: DEV_ADMIN_USER
-          admin_password: DEV_ADMIN_PASSWORD
-          pinggy_url: DEV_PINGGY_URL
-          sql_password: DEV_SQL_PASSWORD
+    uses: ./.github/workflows/db-setup-template.yml
+    with:
+      environment: development
+      admin_user: DEV_ADMIN_USER
+      admin_password: DEV_ADMIN_PASSWORD
+      pinggy_url: DEV_PINGGY_URL
+      sql_password: DEV_SQL_PASSWORD
 
   setup-prod:
-    runs-on: ubuntu-latest
-    environment: production
     needs: setup-dev
     if: github.event_name != 'pull_request'
-    steps:
-      - uses: ./.github/workflows/templates/db-setup-template.yml
-        with:
-          environment: production
-          admin_user: PROD_ADMIN_USER
-          admin_password: PROD_ADMIN_PASSWORD
-          pinggy_url: PROD_PINGGY_URL
-          sql_password: PROD_SQL_PASSWORD
+    uses: ./.github/workflows/db-setup-template.yml
+    with:
+      environment: production
+      admin_user: PROD_ADMIN_USER
+      admin_password: PROD_ADMIN_PASSWORD
+      pinggy_url: PROD_PINGGY_URL
+      sql_password: PROD_SQL_PASSWORD
