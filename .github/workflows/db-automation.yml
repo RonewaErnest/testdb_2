@@ -15,7 +15,7 @@ jobs:
 
   Production:
     needs: development
-    uses: ./.github/workflows/sql-template.yml
+    uses: ./.github/workflows/db-setup-template.yml
     with:
       environment: production
     secrets:
