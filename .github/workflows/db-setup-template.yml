@@ -30,10 +30,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     steps:
+      # Step 1: Set up job (automatically handled by GitHub Actions)
+
+      # Step 2: Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Add Microsoft repository for SQL Server tools
+      # Step 3: Install sqlcmd
+      - name: Install sqlcmd
         shell: bash
         run: |
           sudo apt-get update
@@ -41,15 +45,10 @@ jobs:
           curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
           curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/msprod.list
           sudo apt-get update
+          sudo apt-get install -y mssql-tools unixodbc-dev
+          echo "/opt/mssql-tools/bin" >> $GITHUB_PATH
 
-      - name: Install SQL Server client
-        shell: bash
-        run: sudo apt-get install -y mssql-tools unixodbc-dev
-
-      - name: Add SQL Server tools to PATH
-        shell: bash
-        run: echo "/opt/mssql-tools/bin" >> $GITHUB_PATH
-
+      # Debug Step: Test network connectivity
       - name: Debug Network Connectivity
         shell: bash
         env:
@@ -64,7 +63,8 @@ jobs:
           echo "Testing port: $PORT on host: $HOST"
           nc -zv "$HOST" "$PORT" || echo "Port test failed"
 
-      - name: Test Connection to SQL Server
+      # Step 4: Deploy SQL
+      - name: Deploy SQL
         shell: bash
         env:
           ADMIN_USER: ${{ secrets[inputs.admin_user] }}
@@ -72,6 +72,7 @@ jobs:
           PINGGY_URL: ${{ secrets[inputs.pinggy_url] }}
         run: |
           set +e
+          # Test connection
           sqlcmd -S "$PINGGY_URL" -U "$ADMIN_USER" -P "$ADMIN_PASSWORD" -C -Q "SELECT @@VERSION"
           EXIT_CODE=$?
           if [ $EXIT_CODE -ne 0 ]; then
@@ -80,15 +81,7 @@ jobs:
             exit 1
           fi
           echo "Database connection successful"
-
-      - name: Setup Database and Objects
-        shell: bash
-        env:
-          ADMIN_USER: ${{ secrets[inputs.admin_user] }}
-          ADMIN_PASSWORD: ${{ secrets[inputs.admin_password] }}
-          PINGGY_URL: ${{ secrets[inputs.pinggy_url] }}
-        run: |
-          set +e
+          # Run setup script
           sqlcmd -S "$PINGGY_URL" -U "$ADMIN_USER" -P "$ADMIN_PASSWORD" -C -i "scripts/setup2.sql"
           EXIT_CODE=$?
           if [ $EXIT_CODE -ne 0 ]; then
@@ -98,7 +91,8 @@ jobs:
           fi
           echo "Database setup completed successfully"
 
-      - name: Test Connection and Data
+      # Step 5: Verify Deployment
+      - name: Verify Deployment
         shell: bash
         env:
           PINGGY_URL: ${{ secrets[inputs.pinggy_url] }}
@@ -113,3 +107,6 @@ jobs:
             exit 1
           fi
           echo "Data verification successful"
+
+      # Step 6: Post Checkout repository (automatically handled by GitHub Actions)
+      # Step 7: Complete job (automatically handled by GitHub Actions)
