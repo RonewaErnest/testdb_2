@@ -22,3 +22,4 @@ jobs:
       sql_server: ${{ secrets.PROD_SQL_SERVER }}
       sql_user: ${{ secrets.PROD_SQL_USER }}
       sql_password: ${{ secrets.PROD_SQL_PASSWORD }}
+      
