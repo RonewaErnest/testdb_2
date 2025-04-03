@@ -1,3 +1,4 @@
+# .github/workflows/db-setup-template.yml
 name: Database Setup Template
 
 on:
@@ -28,156 +29,84 @@ jobs:
   setup:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    
     steps:
-      - name: Validate Secrets
-        shell: bash
-        run: |
-          echo "=== Environment: ${{ inputs.environment }} ==="
-          required_secrets=(
-            "${{ inputs.admin_user }}"
-            "${{ inputs.admin_password }}"
-            "${{ inputs.pinggy_url }}"
-            "${{ inputs.sql_password }}"
-          )
-          
-          for secret in "${required_secrets[@]}"; do
-            if [ -z "${{ secrets[secret] }}" ]; then
-              echo "::error::Secret '$secret' is empty or not set"
-              exit 1
-            else
-              echo "✓ Secret '$secret' is available"
-            fi
-          done
-          echo "All secrets validated successfully"
+      # Step 1: Set up job (automatically handled by GitHub Actions)
 
+      # Step 2: Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
-      - name: Install SQL Server tools
+      # Step 3: Install sqlcmd
+      - name: Install sqlcmd
         shell: bash
         run: |
-          echo "=== Installing SQL Server Tools ==="
-          sudo apt-get update -qq
-          sudo apt-get install -y curl gnupg
-          
-          # Add Microsoft repository
-          curl https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft.gpg
-          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/ubuntu/20.04/prod focal main" | sudo tee /etc/apt/sources.list.d/mssql-release.list
-          
-          # Install components
-          sudo apt-get update -qq
-          sudo ACCEPT_EULA=Y apt-get install -y mssql-tools unixodbc-dev
+          sudo apt-get update
+          sudo apt-get install -y curl
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+          curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/msprod.list
+          sudo apt-get update
+          sudo apt-get install -y mssql-tools unixodbc-dev
           echo "/opt/mssql-tools/bin" >> $GITHUB_PATH
-          
-          # Verify installation
-          sqlcmd -? | head -n 1 || echo "::error::SQLCMD installation failed"
 
-      - name: Network Diagnostics
+      # Debug Step: Test network connectivity
+      - name: Debug Network Connectivity
         shell: bash
         env:
           PINGGY_URL: ${{ secrets[inputs.pinggy_url] }}
         run: |
-          echo "=== Network Diagnostics ==="
-          echo "PINGGY_URL: $PINGGY_URL"
-          
-          # Parse connection details
-          if [[ "$PINGGY_URL" =~ tcp://([^,]+),([0-9]+) ]]; then
-            HOST="${BASH_REMATCH[1]}"
-            PORT="${BASH_REMATCH[2]}"
-            echo "Resolved Host: $HOST"
-            echo "Resolved Port: $PORT"
-            
-            # Network tests
-            echo "=== Basic Connectivity Tests ==="
-            echo "Ping test:"
-            ping -c 4 "$HOST" || echo "::warning::Ping failed"
-            
-            echo "Port test:"
-            timeout 5 nc -zvw3 "$HOST" "$PORT" || echo "::warning::Port test failed"
-            
-            echo "Curl test:"
-            curl -m 5 -v "http://$HOST:$PORT" || echo "::warning::Curl test failed"
-          else
-            echo "::error::Invalid PINGGY_URL format. Expected 'tcp://host,port'"
-            exit 1
-          fi
+          echo "Attempting to connect to: $PINGGY_URL"
+          # Extract host and port from PINGGY_URL (e.g., tcp:hostname,port -> hostname and port)
+          HOST=$(echo "$PINGGY_URL" | sed 's/tcp://' | cut -d',' -f1)
+          PORT=$(echo "$PINGGY_URL" | sed 's/tcp://' | cut -d',' -f2)
+          echo "Pinging host: $HOST"
+          ping -c 4 "$HOST" || echo "Ping failed"
+          echo "Testing port: $PORT on host: $HOST"
+          nc -zv "$HOST" "$PORT" || echo "Port test failed"
 
-      - name: Database Connection Test
+      # Step 4: Deploy SQL
+      - name: Deploy SQL
         shell: bash
         env:
           ADMIN_USER: ${{ secrets[inputs.admin_user] }}
           ADMIN_PASSWORD: ${{ secrets[inputs.admin_password] }}
           PINGGY_URL: ${{ secrets[inputs.pinggy_url] }}
         run: |
-          echo "=== Database Connection Test ==="
           set +e
-          
-          # Test with increased timeout
-          echo "Testing connection with 30s timeout..."
-          sqlcmd -S "$PINGGY_URL" -U "$ADMIN_USER" -P "$ADMIN_PASSWORD" -l 30 -C -Q "SELECT @@VERSION" > connection_test.log 2>&1
+          # Test connection
+          sqlcmd -S "$PINGGY_URL" -U "$ADMIN_USER" -P "$ADMIN_PASSWORD" -C -Q "SELECT @@VERSION"
           EXIT_CODE=$?
-          
-          cat connection_test.log
           if [ $EXIT_CODE -ne 0 ]; then
-            echo "::error::Connection failed with exit code $EXIT_CODE"
-            
-            # Common error patterns
-            grep -q "Login timeout expired" connection_test.log && echo "::error::Login timeout - check network/firewall"
-            grep -q "TCP Provider" connection_test.log && echo "::error::Network issue - check host/port"
-            grep -q "Login failed" connection_test.log && echo "::error::Authentication failed - check credentials"
-            
+            echo "Error: Database connection failed - check server URL, credentials, or network"
+            echo "::error::Database connection test failed"
             exit 1
           fi
-          echo "✓ Connection successful"
+          echo "Database connection successful"
+          # Run setup script
+          sqlcmd -S "$PINGGY_URL" -U "$ADMIN_USER" -P "$ADMIN_PASSWORD" -C -i "scripts/setup2.sql"
+          EXIT_CODE=$?
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "Error: Database setup failed - check script syntax or permissions"
+            echo "::error::Database setup execution failed"
+            exit 1
+          fi
+          echo "Database setup completed successfully"
 
-      - name: Execute Database Setup
-        shell: bash
-        env:
-          ADMIN_USER: ${{ secrets[inputs.admin_user] }}
-          ADMIN_PASSWORD: ${{ secrets[inputs.admin_password] }}
-          PINGGY_URL: ${{ secrets[inputs.pinggy_url] }}
-        run: |
-          echo "=== Executing Database Setup ==="
-          set -e
-          
-          # Validate SQL file exists
-          if [ ! -f "scripts/setup2.sql" ]; then
-            echo "::error::SQL script not found at scripts/setup2.sql"
-            exit 1
-          fi
-          
-          echo "Running setup script with 2 minute timeout..."
-          sqlcmd -S "$PINGGY_URL" -U "$ADMIN_USER" -P "$ADMIN_PASSWORD" -l 120 -C -i "scripts/setup2.sql" -o setup_output.log
-          
-          # Check for errors in output
-          if grep -q "Msg [0-9]* Level [0-9]*" setup_output.log; then
-            echo "::error::Errors detected in SQL script execution"
-            cat setup_output.log
-            exit 1
-          fi
-          
-          echo "✓ Database setup completed successfully"
-          cat setup_output.log
-
+      # Step 5: Verify Deployment
       - name: Verify Deployment
         shell: bash
         env:
           PINGGY_URL: ${{ secrets[inputs.pinggy_url] }}
           SQL_PASSWORD: ${{ secrets[inputs.sql_password] }}
         run: |
-          echo "=== Verification ==="
           set +e
-          
-          echo "Testing application user access..."
-          sqlcmd -S "$PINGGY_URL" -U Auto_user -P "$SQL_PASSWORD" -d AutoDBErnest -C -Q "SELECT TOP 1 * FROM [dbo].[user];" > verify.log 2>&1
+          sqlcmd -S "$PINGGY_URL" -U Auto_user -P "$SQL_PASSWORD" -C -d AutoDBErnest -Q "SELECT * FROM [dbo].[user];"
           EXIT_CODE=$?
-          
-          cat verify.log
           if [ $EXIT_CODE -ne 0 ]; then
-            echo "::error::Verification failed with exit code $EXIT_CODE"
+            echo "Error: Data verification failed - check user permissions or data existence"
+            echo "::error::Data verification failed"
             exit 1
           fi
-          echo "✓ Verification successful"
+          echo "Data verification successful"
+
+      # Step 6: Post Checkout repository (automatically handled by GitHub Actions)
+      # Step 7: Complete job (automatically handled by GitHub Actions)
